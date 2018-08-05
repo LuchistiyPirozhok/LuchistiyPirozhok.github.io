@@ -1,0 +1,490 @@
+<html>
+	<canvas id="canvas" width="800" height="600"></canvas>
+</html>
+<script>
+	function Vector (x,y){
+		this.x=x;
+		this.y=y;
+	}
+	
+	Vector.prototype.add=function(other){
+		return new Vector(this.x+other.x,this.y+other.y);
+	}
+
+	Vector.prototype.mul=function(magnitude){
+		return new Vector(this.x*magnitude,this.y*magnitude);
+	}
+	
+	Vector.prototype.lng=function(){
+		return Math.sqrt(this.x*this.x+this.y*this.y);
+	}
+	
+	Vector.prototype.direction=function(){
+		let lng=this.lng();
+		if(lng!==0)
+			return new Vector(this.x/lng,this.y/lng);
+		return new Vector(0,0);
+	}
+	
+	Vector.prototype.rotate=function(angle){
+		let sinA = Math.sin(angle);
+		let cosA = Math.cos(angle);
+		let lng = this.lng();
+		if(lng!==0)
+			return new Vector(this.x*cosA-this.y*sinA,this.x*sinA+this.y*cosA);
+		return new Vector(0,0);
+	}
+	
+	Vector.prototype.rotateDeg = function(angle){
+		let angleRad=Math.PI*angle/180;
+		return this.rotate(angleRad);	
+	}
+	
+	Vector.prototype.fix=function(num=2){
+		return new Vector(+this.x.toFixed(num),+this.y.toFixed(num));
+	}	
+</script>
+
+<script>
+	function KeyManager(){		
+		this.downCallback=this.onKeyDown.bind(this);
+		this.upCallback=this.onKeyUp.bind(this);
+		window.addEventListener("keydown",this.downCallback);
+		window.addEventListener("keyup",this.upCallback);
+		this.keyState = {};
+	}
+	
+	KeyManager.prototype.onKeyDown = function (e){
+		this.keyState[e.keyCode]=true;
+	}
+	
+	KeyManager.prototype.onKeyUp = function(e){
+		this.keyState[e.keyCode]=false;
+	}
+	
+	KeyManager.prototype.destroy = function(){
+		window.removeEventListener("keydown",this.downCallback);
+		window.removeEventListener("keyup",this.upCallback);
+	}
+	
+	KeyManager.prototype.isPressed=function(code){
+		return !!this.keyState[code];
+	}
+	window.$km = new KeyManager();	
+</script>
+
+<script>
+	function zero(){
+		return new Vector(0,0);
+	}
+
+	function Box(x=0,y=0,vx=0,vy=0,ax=0,ay=0,maxSpd=3){
+		this.pos = new Vector(x,y);
+		this.vel = new Vector(vx,vy);
+		this.axl = new Vector(ax,ay);
+		this.maxSpd = maxSpd;
+		this.dead=false;
+	}
+	
+	Box.prototype.isDead = function (){
+		return this.dead;
+	}
+	Box.prototype.update = function(items){
+		this.vel=this.vel.add(this.axl);
+		let velLng = this.vel.lng();
+		if(velLng>this.maxSpd)
+			this.vel = this.vel.mul(this.maxSpd/velLng);
+		this.pos = this.pos.add(this.vel);
+		this.axl = zero();
+	}
+	
+	
+	Box.prototype.applyForce=function(force){
+		this.axl = this.axl.add(force);
+	}
+
+	
+
+
+</script>
+
+<script>
+	function Shot(){
+		Box.apply(this,arguments);
+		this.w = W/60;
+		
+	}
+	Shot.prototype=Object.create(Box.prototype);
+	Shot.prototype.constructor = Shot;
+	
+	Shot.prototype.draw =function(ctx){
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		ctx.moveTo(this.pos.x,this.pos.y);
+		let end = this.pos.add(this.vel.direction().mul(-this.w));
+		ctx.lineTo(end.x,end.y);
+		ctx.strokeStyle="yellow";
+		ctx.stroke();
+	}
+		
+	Shot.prototype.update = function (items){
+		Box.prototype.update.apply(this,items);
+		if(this.pos.x<0 || this.pos.x>W || this.pos.y<0 || this.pos.y>H) 
+			this.dead=true;
+		
+	}
+	
+</script>
+
+<script>
+	function Spark(){
+		Box.apply(this,arguments);
+		this.lifetime = 90;
+	}
+	Spark.prototype=Object.create(Box.prototype);
+	Spark.prototype.constructor=Spark;
+	
+	Spark.prototype.update = function(){
+		Box.prototype.update.apply(this,arguments);
+		if(--this.lifetime===0)
+			this.dead=true;
+	}
+	
+	Spark.prototype.draw = function(ctx){
+		let red = 0xff;
+		let green = Math.floor((1-this.lifetime/90)*255);
+		let blue = 0;
+		let alfa = 255-green;
+		let color = red*Math.pow(2,24)+(green<<16)+(blue<<8)+alfa;
+		ctx.fillStyle="#"+color.toString(16);
+		ctx.fillRect(this.pos.x-2,this.pos.y-2,4,4);
+	}
+	
+	
+
+</script>
+
+<script>	
+	function Ship(x,y,vx,vy,ax,ay,maxSpd){
+		Box.apply(this,arguments);
+		if(this.vel.lng()==0){
+			this.direction = new Vector(1,0);
+		}else{
+			this.direction = this.vel.direction();
+		}
+		this.w = W/30;
+		this.h = H/30;
+		this.shotDelay = 10;
+		this.lastShot = - this.shotDelay;
+		
+	}
+	
+	Ship.prototype=Object.create(Box.prototype);
+	Ship.prototype.constructor = Ship;
+	Ship.prototype.update = function(items) {
+		if($km.isPressed(KEY_LEFT)){
+			this.direction = this.direction.rotateDeg(5);
+		}
+		if($km.isPressed(KEY_RIGHT)){
+			this.direction = this.direction.rotateDeg(-5);
+		}
+		if($km.isPressed(KEY_UP)){
+			this.applyForce(this.direction.mul(.1));
+			let pos = this.pos.add(this.direction.mul(-this.w/2));
+			let vel = this.vel.mul(-1).rotateDeg(-15+Math.random()*30);
+			$particles.push(new Spark(pos.x,pos.y,vel.x,vel.y));
+		}		
+		if($km.isPressed(KEY_SPACE) && $f-this.lastShot>this.shotDelay){
+			this.lastShot=$f;
+			let p = this.pos.add(this.direction.mul(this.w/2));
+			let v = this.direction.mul(5+this.vel.lng());
+			items.push(new Shot(p.x,p.y,v.x,v.y,0,0,v.lng()));
+		}
+		Box.prototype.update.apply(this,items);		
+		if(this.pos.x<0) this.pos.x +=W;
+		if(this.pos.x>W) this.pos.x -=W;
+		if(this.pos.y<0) this.pos.y +=H;
+		if(this.pos.y>H) this.pos.y -=H;
+	}
+	
+	Ship.prototype.draw = function(ctx){
+		let horOffset = this.direction.mul(this.w/2);
+		let pos1 = this.pos.add(horOffset).fix(0);
+		let pos2 = this.pos.add(horOffset.mul(-1)).add(this.direction.rotateDeg(90).mul(this.h/2)).fix(0);
+		let pos3 = this.pos.add(horOffset.mul(-1)).add(this.direction.rotateDeg(-90).mul(this.h/2)).fix(0);
+		
+		ctx.fillStyle="white";
+		ctx.beginPath();
+		ctx.moveTo(pos1.x,pos1.y);
+		ctx.lineTo(pos2.x,pos2.y);
+		ctx.lineTo(pos3.x,pos3.y);
+		ctx.closePath();
+		ctx.fill();
+	}
+	
+	
+</script>
+
+<script>	
+	function Asteroid(){
+		
+		Box.apply(this,arguments);	
+		let size = 0;		
+	    if ($f>1800 && $f<3600) 
+			size = Math.random() > 0.5 ? 0:1;
+		else if($f>=3600)
+			size = Math.floor(Math.random()*3);	
+		this.init(size);
+		this.rotation = Math.random()-.5;			
+	}
+	
+	Asteroid.prototype = Object.create(Box.prototype);
+	Asteroid.prototype.constructor=Asteroid;
+	
+	
+	Asteroid.prototype.init=function(size=0){
+		this.size=size;
+		this.r=this.radiuses()[size];
+		
+		let curPoint = new Vector(this.r,0);
+		this.points = [];
+		this.points.push(curPoint);
+		let ptsCnt = 5 + Math.floor(Math.random()*4);
+		let segmentAngle = 350/ptsCnt;
+		let diff = segmentAngle/5;
+		for(let i = 1;i<ptsCnt;i++){			
+			this.points.push(curPoint.rotateDeg(segmentAngle*i-diff+Math.random()*diff*2));			
+		}	
+	}
+	Asteroid.prototype.collide=function(i){
+		return this.pos.add(i.pos.mul(-1)).lng()<this.r;
+	}	
+	
+	Asteroid.prototype.radiuses = function(){return  [W/40,W/20,W/10];}
+	Asteroid.prototype.split=function(items){
+		if(this.size==0) return;
+		let splitCnt = 2 + Math.floor(Math.random()*2);
+		let startAngle=180/splitCnt;
+		let diff = startAngle*2;
+		for(let i = 0 ; i <splitCnt; i++){
+			let newVel = this.vel.rotateDeg(startAngle+diff*i);
+			let asteroid = new Asteroid(this.pos.x,this.pos.y,newVel.x,newVel.y);
+			asteroid.init(this.size-1);
+			items.push(asteroid);
+		}
+	
+	}
+	
+	Asteroid.prototype.update=function(items){
+		
+		Box.prototype.update.apply(this,items);
+		this.points = this.points.map(i=>i.rotateDeg(this.rotation));
+		if(this.pos.x<0) this.pos.x+=W;
+		if(this.pos.x>W) this.pos.x-=W;
+		if(this.pos.y<0) this.pos.y+=H;
+		if(this.pos.y>H) this.pos.y-=H;
+			
+		items.forEach(i=>{
+			if(i instanceof Ship && this.collide(i))
+				i.dead=true;
+			else if(i instanceof Shot && this.collide(i)){
+				i.dead=true;
+				this.dead=true;
+				this.split(items);
+				$score+=500 * Math.pow(3,this.size);
+				let sparks = Math.random()*10+20;
+				for(let i = 0 ; i < sparks;i++){
+					let vel = this.vel.rotateDeg(Math.random()*360).mul(Math.random()*1.5-.25);
+					let pos = new Vector(this.pos.x,this.pos.y);
+					$particles.push(new Spark(pos.x,pos.y,vel.x,vel.y));
+				}
+				
+			}
+		});
+		
+	}
+	
+	Asteroid.prototype.draw=function(ctx){
+		ctx.fillStyle="grey";
+		ctx.beginPath();
+		let start =this.pos.add(this.points[0]).fix(0);
+		ctx.moveTo(start.x,start.y);
+		for(let i = 1 ; i < this.points.length;i++){
+			let point = this.pos.add(this.points[i]).fix(0);
+			ctx.lineTo(point.x,point.y);
+		}
+		ctx.closePath();
+		ctx.fill();
+	}
+	
+	
+	
+	
+</script>
+
+<script>
+	function drawPause(ctx){
+		ctx.lineWidth=4;
+		ctx.font="bold 30px consola";
+		ctx.strokeStyle="black";
+		ctx.textAlign="center";
+		ctx.strokeText("PAUSE",W/2,H/2-40);
+		ctx.fillText("PAUSE",W/2,H/2-40);	
+		ctx.font="bold 20px consola";
+		ctx.textAlign="start";
+		let i = 1;
+		ctx.strokeText("Arrow Left - rotate anti-clockwise",W/2-150,H/2);
+		ctx.fillText("Arrow Left - rotate anti-clockwise",W/2-150,H/2);
+		ctx.strokeText("Arrow Right - rotate clockwise",W/2-150,H/2+20*i);
+		ctx.fillText("Arrow Right - rotate clockwise",W/2-150,H/2+20*i++);
+		ctx.strokeText("Arrow Up - thrust",W/2-150,H/2+20*i);
+		ctx.fillText("Arrow Up - thrust",W/2-150,H/2+20*i++);
+		ctx.strokeText("Space - shoot/resume",W/2-150,H/2+20*i);
+		ctx.fillText("Space - shoot/resume",W/2-150,H/2+20*i++);
+		ctx.strokeText("Escape - pause/resume",W/2-150,H/2+20*i);
+		ctx.fillText("Escape - pause/resume",W/2-150,H/2+20*i++);
+		ctx.strokeText("Key R - restart",W/2-150,H/2+20*i);
+		ctx.fillText("Key R - restart",W/2-150,H/2+20*i++);		
+		ctx.lineWidth=1;	
+	}
+	
+	function drawGameOver(ctx){
+		ctx.lineWidth=4;
+		ctx.font="bold 30px consola";
+		ctx.strokeStyle="black";
+		ctx.textAlign="center";
+		ctx.strokeText("GAME OVER",W/2,H/2-40);
+		ctx.fillText("GAME OVER",W/2,H/2-40);	
+		ctx.strokeText("Score: "+$score,W/2,H/2);
+		ctx.fillText("Score: "+$score,W/2,H/2);
+		ctx.lineWidth=1;	
+	}
+	
+	function generateAsteroid(ship,items){
+		let asteroid = new Asteroid();
+		
+		let vel = new Vector(1+Math.random()*3,0)
+						.rotateDeg(Math.random()*360);
+		
+		
+		let pos;
+		do{
+			pos=new Vector(Math.random()*W,Math.random()*H);
+		}while(pos.add(vel.mul(60)).add(ship.pos.add(ship.vel.mul(60)).mul(-1)).lng()>Math.max(200,asteroid.r) 
+				&& pos.add(ship.pos.mul(-1)).lng()>Math.max(200,asteroid.r*1.5))
+		
+		asteroid.pos=pos;
+		asteroid.vel=vel;
+		items.push(asteroid);
+		
+	}
+	
+</script>
+
+
+
+<script>
+	const KEY_ESC = 27;
+	const KEY_R = 82;
+	const KEY_UP=38;
+	const KEY_DOWN=40;
+	const KEY_LEFT=37;
+	const KEY_RIGHT=39;
+	const KEY_SPACE=32;
+	
+	
+	const STATE_GAME = 0;
+	const STATE_PAUSE = 1;
+	const STATE_GAMEOVER=2;
+
+	let canvas = document.getElementById("canvas");
+	let ctx = canvas.getContext("2d");
+	const W = 800;
+	const H = 600;
+	
+	let ship;
+	let items;
+	let escWasPressed;
+	let oldState;
+	let state;
+
+	function setup(){
+		ship = new Ship(W/2,H/2);
+		items = [];
+		escWasPressed=false;
+		oldState=null;
+		state=STATE_PAUSE;
+		window.$f=0;
+		window.$score=0;		
+		window.$particles=[];
+		
+		items.push(ship);
+		generateAsteroid(ship,items);
+		generateAsteroid(ship,items);
+	}
+	
+	function update(){
+		if(state===STATE_GAME){
+			items.forEach(i=>i.update(items));
+			items=items.filter(i=>!i.isDead());
+			$particles.forEach(i=>i.update());
+			$particles=$particles.filter(i=>!i.isDead());
+			
+			if(ship.isDead()) state=STATE_GAMEOVER;
+			
+			if($f%300===0)
+				generateAsteroid(ship,items);	
+				
+			$f++;
+		}
+		if($km.isPressed(KEY_ESC) && !escWasPressed){
+			escWasPressed=true;
+			if(state !=STATE_PAUSE){
+				oldState = state;
+				state = STATE_PAUSE
+			} else {
+				state = oldState ? oldState:STATE_GAME;
+			}
+		}else if(!$km.isPressed(KEY_ESC) && escWasPressed){
+			escWasPressed=false;			
+		}
+		
+		if($km.isPressed(KEY_SPACE) && !escWasPressed && state === STATE_PAUSE){
+			state = oldState ? oldState:STATE_GAME;
+		}
+		
+		if($km.isPressed(KEY_R)){
+			setup();
+			state=STATE_GAME;
+		}
+		
+			 
+		
+	}
+
+	function draw(){
+		ctx.fillStyle="black";
+		ctx.fillRect(0,0,W,H);
+		$particles.forEach(i=>i.draw(ctx));
+		items.forEach(i=>i.draw(ctx));		
+		ctx.font="bold 20px consola"
+		ctx.fillStyle="white";
+		ctx.textAlign="end";
+	    ctx.fillText($score,W-10,30);
+		if(state===STATE_PAUSE){
+			drawPause(ctx);	
+		}
+		if(state===STATE_GAMEOVER){
+			drawGameOver(ctx);
+		}
+	}
+	
+	setup();
+	draw();
+	setInterval(function(){
+		update();
+		draw();
+		
+	},1000/60);
+
+</script>
