@@ -372,7 +372,7 @@
 		let s = +(totalTime/1000%60).toFixed(0);
 		if(s<10) s="0"+s;
 		let m = +(totalTime/60000).toFixed(0);
-		if(m<10) m = "0";
+		if(m<10) m = "0"+m;
 		let totalTimeStr=m+":"+s+","+ms;
 	    ctx.fillText(totalTimeStr,10,30);
 	}
