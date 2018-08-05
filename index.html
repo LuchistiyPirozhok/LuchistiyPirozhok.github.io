@@ -1,6 +1,9 @@
 <html>
-	<canvas id="canvas" width="800" height="600"></canvas>
-</html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	</head>
+	<body>
+		<canvas id="canvas" width="800" height="600"></canvas>
 <script>
 	function Vector (x,y){
 		this.x=x;
@@ -183,10 +186,10 @@
 	Ship.prototype.constructor = Ship;
 	Ship.prototype.update = function(items) {
 		if($km.isPressed(KEY_LEFT)){
-			this.direction = this.direction.rotateDeg(5);
+			this.direction = this.direction.rotateDeg(-5);
 		}
 		if($km.isPressed(KEY_RIGHT)){
-			this.direction = this.direction.rotateDeg(-5);
+			this.direction = this.direction.rotateDeg(5);
 		}
 		if($km.isPressed(KEY_UP)){
 			this.applyForce(this.direction.mul(.1));
@@ -360,6 +363,20 @@
 		ctx.lineWidth=1;	
 	}
 	
+	function drawTotalTime(ctx){
+		ctx.font="bold 20px consola"
+		ctx.fillStyle="white";
+		ctx.textAlign="start";
+		let ms = totalTime%1000;
+		if(ms<100) ms="0"+ms;
+		let s = +(totalTime/1000%60).toFixed(0);
+		if(s<10) s="0"+s;
+		let m = +(totalTime/60000).toFixed(0);
+		if(m<10) m = "0";
+		let totalTimeStr=m+":"+s+","+ms;
+	    ctx.fillText(totalTimeStr,10,30);
+	}
+	
 	function generateAsteroid(ship,items){
 		let asteroid = new Asteroid();
 		
@@ -379,11 +396,11 @@
 		
 	}
 	
-</script>
+    </script>
 
 
 
-<script>
+    <script>
 	const KEY_ESC = 27;
 	const KEY_R = 82;
 	const KEY_UP=38;
@@ -407,6 +424,9 @@
 	let escWasPressed;
 	let oldState;
 	let state;
+	let prevTime;
+	let totalTime;
+	
 
 	function setup(){
 		ship = new Ship(W/2,H/2);
@@ -417,14 +437,17 @@
 		window.$f=0;
 		window.$score=0;		
 		window.$particles=[];
-		
 		items.push(ship);
 		generateAsteroid(ship,items);
 		generateAsteroid(ship,items);
+		prevTime=+new Date();
+		totalTime = 0;
 	}
 	
 	function update(){
+		
 		if(state===STATE_GAME){
+			totalTime += +new Date()-prevTime;
 			items.forEach(i=>i.update(items));
 			items=items.filter(i=>!i.isDead());
 			$particles.forEach(i=>i.update());
@@ -457,11 +480,11 @@
 			setup();
 			state=STATE_GAME;
 		}
-		
+		prevTime=+new Date();
 			 
 		
 	}
-
+	
 	function draw(){
 		ctx.fillStyle="black";
 		ctx.fillRect(0,0,W,H);
@@ -471,6 +494,7 @@
 		ctx.fillStyle="white";
 		ctx.textAlign="end";
 	    ctx.fillText($score,W-10,30);
+		drawTotalTime(ctx);
 		if(state===STATE_PAUSE){
 			drawPause(ctx);	
 		}
@@ -487,4 +511,6 @@
 		
 	},1000/60);
 
-</script>
+    </script>
+  </body>
+</html>
